@@ -91,6 +91,7 @@ assignArray a i v
       (I targetIndex) = i
       (I changeTo) = v
       assignArray' :: [(Int,Int)] -> Int -> Int -> [(Int,Int)]
+      assignArray' [] targetIndex changeTo = [(targetIndex,changeTo)]
       assignArray' aArray@((index,val):remList) targetIndex changeTo
         | index == targetIndex = (index,changeTo) : remList
         | otherwise = (index,val) : (assignArray' remList targetIndex changeTo)
@@ -190,21 +191,20 @@ executeStatement whileLoop@(While judgeExpr toExecuteBlock) givenFunDef givenPro
       evalJudgeExpr = eval judgeExpr givenFunDef givenState
       newState = executeBlock toExecuteBlock givenFunDef givenProcDef givenState
 executeStatement (Call valToReturn pId argExprs) givenFunDef givenProcDef givenState
-  | valToReturn /= "" && notElem bindingReturned stateAfterExecBlock
-      = bindingReturned : getGlobals stateAfterExecBlock
-  | otherwise = getGlobals stateAfterExecBlock
+  = updateVar (valToReturn,newVal) (getLocals givenState ++ getGlobals stateAfterExecBlock)
+  -- | valToReturn /= "" = updateVar (valToReturn,newVal) (getLocals givenState ++ getGlobals stateAfterExecBlock)
+  -- | otherwise = getLocals givenState ++ getGlobals stateAfterExecBlock
   where
     procToExec@(procIds,procBlock) = lookUp pId givenProcDef
-    argVals = [eval x givenFunDef givenState | x <- argExprs]
-    procIdVal = zip procIds argVals
-    stateInProc = combineState procIdVal globalState
+    argVals = evalArgs argExprs givenFunDef givenState
+    procState = bindArgs procIds argVals
     globalState = getGlobals givenState
-    stateAfterExecBlock = executeBlock procBlock givenFunDef givenProcDef stateInProc
+    stateAfterExecBlock = executeBlock procBlock givenFunDef givenProcDef (procState ++ globalState)
     bindingReturned = (valToReturn,lookUp valToReturn stateAfterExecBlock)
-executeStatement (Return e) _ _ givenState = givenState
-combineState :: [(Id,Value)] -> State -> State
-combineState [] currState = currState
-combineState idVal@(x:xs) currState = combineState xs (updateVar x currState)
+    (_,newVal) = lookUp "$res" stateAfterExecBlock
+executeStatement (Return e) givenFunDef _ givenState =  updateVar ("$res",eValue) givenState
+  where
+    eValue = eval e givenFunDef givenState
 
 
 
